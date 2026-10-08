@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f0f12">
+<title>提词器</title>
+<style>
+  :root {
+    --bg: #0f0f12; --card: #1a1a20; --text: #e8e8ec;
+    --muted: #8a8a96; --accent: #6ea8fe; --border: #2a2a34;
+  }
+  html[data-theme="light"] {
+    --bg: #f5f5f7; --card: #ffffff; --text: #1a1a1f;
+    --muted: #7a7a86; --accent: #2f6fed; --border: #e2e2e8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.6;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .25s, color .25s;
+  }
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .back {
+    color: var(--accent); text-decoration: none;
+    font-size: 15px; white-space: nowrap; flex-shrink: 0;
+    padding: 4px 8px; margin-left: -8px; border-radius: 6px;
+  }
+  .back:active { background: rgba(110,168,254,.15); }
+  .topbar h1 {
+    font-size: 17px; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .content {
+    padding: 24px 20px calc(80px + env(safe-area-inset-bottom));
+    max-width: 640px; margin: 0 auto;
+  }
+  .intro {
+    color: var(--muted); font-size: 13px;
+    margin-bottom: 20px;
+  }
+
+  /* 功能卡片 */
+  .feature-card {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-bottom: 14px;
+    text-decoration: none;
+    color: var(--text);
+    transition: transform .15s, border-color .2s, box-shadow .2s;
+    cursor: pointer;
+  }
+  .feature-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    box-shadow: 0 8px 24px rgba(110,168,254,.15);
+  }
+  .feature-card:active { transform: translateY(0) scale(.99); }
+  .feature-card.disabled {
+    opacity: .55;
+    cursor: not-allowed;
+  }
+  .feature-card.disabled:hover {
+    transform: none;
+    border-color: var(--border);
+    box-shadow: none;
+  }
+  .feature-icon {
+    font-size: 28px; flex-shrink: 0;
+    width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(110,168,254,.12);
+    border-radius: 12px;
+  }
+  html[data-theme="light"] .feature-icon {
+    background: rgba(47,111,237,.10);
+  }
+  .feature-info { flex: 1; min-width: 0; }
+  .feature-title {
+    font-size: 16px; font-weight: 700; margin-bottom: 2px;
+  }
+  .feature-desc {
+    font-size: 12px; color: var(--muted);
+  }
+  .feature-arrow {
+    font-size: 20px; color: var(--muted); flex-shrink: 0;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    background: rgba(110,168,254,.18);
+    color: var(--accent);
+    margin-left: 6px;
+    vertical-align: middle;
+    font-weight: 500;
+  }
+
+  /* 提示框 */
+  .hint {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-top: 20px;
+    font-size: 13px;
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .hint strong { color: var(--text); }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="index.html">← 返回</a>
+    <h1>提词器</h1>
+  </div>
+  <div class="content">
+    <p class="intro">选择要使用的设备角色。两台设备需连接同一网络。</p>
+
+    <!-- 屏幕 -->
+    <a class="feature-card" href="prompter-screen.html">
+      <span class="feature-icon">📺</span>
+      <span class="feature-info">
+        <span class="feature-title">屏幕</span>
+        <span class="feature-desc">在设备 1 上显示歌词，作为提词屏幕</span>
+      </span>
+      <span class="feature-arrow">›</span>
+    </a>
+
+    <!-- 遥控器 -->
+    <a class="feature-card" href="prompter-remote.html">
+      <span class="feature-icon">🎮</span>
+      <span class="feature-info">
+        <span class="feature-title">遥控器</span>
+        <span class="feature-desc">在设备 2 上选歌、控制滚动、切换歌词</span>
+      </span>
+      <span class="feature-arrow">›</span>
+    </a>
+
+    <!-- 小程序版（占位） -->
+    <a class="feature-card disabled" id="miniCard">
+      <span class="feature-icon">📱</span>
+      <span class="feature-info">
+        <span class="feature-title">小程序版 <span class="badge">即将上线</span></span>
+        <span class="feature-desc">通过微信小程序作为遥控器或屏幕</span>
+      </span>
+      <span class="feature-arrow">›</span>
+    </a>
+
+    <div class="hint">
+      <strong>使用方式：</strong><br>
+      1. 设备 1 打开「屏幕」，等待连接。<br>
+      2. 设备 2 打开「遥控器」，输入屏幕 ID 连接。<br>
+      3. 两台设备需在同一 Wi-Fi 或局域网下。
+    </div>
+  </div>
+
+<script>
+/* 主题初始化 */
+(function() {
+  let saved = null;
+  try { saved = localStorage.getItem("xuezhiqian-theme"); } catch (e) {}
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches)
+    document.documentElement.setAttribute("data-theme", "light");
+})();
+
+/* 小程序占位点击提示 */
+document.getElementById("miniCard").addEventListener("click", e => {
+  e.preventDefault();
+  alert("小程序版正在开发中，敬请期待。");
+});
+</script>
+</body>
+</html>

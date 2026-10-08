@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>提词器 · 屏幕</title>
+<style>
+  :root {
+    --bg: #0f0f12; --card: #1a1a20; --text: #e8e8ec;
+    --muted: #8a8a96; --accent: #6ea8fe; --border: #2a2a34;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    overflow: hidden;
+  }
+
+  /* ============ 连接提示框 ============ */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,15,18,.96);
+    z-index: 100;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px; padding: 24px;
+    text-align: center;
+  }
+  .overlay.hide { display: none; }
+  .overlay h1 { font-size: 20px; font-weight: 600; color: var(--muted); }
+  .big-id {
+    font-size: 80px; font-weight: 700;
+    letter-spacing: 12px;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    padding-left: 12px;
+  }
+  .overlay .tip { font-size: 14px; color: var(--muted); line-height: 1.8; }
+
+  .skip-btn {
+    margin-top: 10px;
+    padding: 12px 28px;
+    font-size: 15px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    border-radius: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color .15s, transform .1s;
+  }
+  .skip-btn:hover { border-color: var(--accent); }
+  .skip-btn:active { transform: scale(.97); }
+
+  /* ============ 主舞台 ============ */
+  .stage {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    padding: 80px 32px calc(120px + env(safe-area-inset-bottom));
+    text-align: center;
+  }
+
+  /* 空状态 */
+  .empty-view {
+    display: none;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 16px;
+    text-align: center;
+  }
+  .empty-view.show { display: flex; }
+  .empty-view .icon { font-size: 64px; opacity: .4; }
+  .empty-view .text { font-size: 18px; color: var(--muted); }
+
+  /* 仅显示歌名 */
+  .song-name-view {
+    display: none;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px;
+    text-align: center;
+  }
+  .song-name-view.show { display: flex; }
+  .song-name-view .label {
+    font-size: 18px; color: var(--muted);
+    letter-spacing: 4px;
+  }
+  .song-name-view .name {
+    font-size: 100px; font-weight: 700;
+    color: #ffffff;
+    line-height: 1.3;
+    max-width: 1200px;
+    word-break: break-word;
+  }
+  .song-name-view .wait {
+    font-size: 20px; color: var(--muted);
+    margin-top: 12px;
+  }
+
+  /* 逐行歌词 */
+  .lyrics-view {
+    display: none;
+    flex-direction: column;
+    align-items: center; justify-content: center;
+    width: 100%;
+    text-align: center;
+  }
+  .lyrics-view.show { display: flex; }
+  .lyrics-view .current-line {
+    font-size: 80px;
+    line-height: 1.2;
+    font-weight: 600;
+    color: #ffffff;
+    max-width: 1200px;
+    word-break: break-word;
+  }
+  .lyrics-view .song-title-mini {
+    position: absolute;
+    top: calc(16px + env(safe-area-inset-top));
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 16px;
+    color: var(--muted);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    padding: 0 16px;
+  }
+
+  /* 下一行预览 */
+  .next-line-preview {
+    position: absolute;
+    bottom: calc(30px + env(safe-area-inset-bottom));
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 28px;
+    color: var(--muted);
+    padding: 0 32px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    transition: opacity .2s;
+  }
+  .next-line-preview .prefix {
+    font-size: 16px;
+    color: #55555f;
+    margin-right: 10px;
+    letter-spacing: 2px;
+  }
+
+  /* ============ 右下角按钮组 ============ */
+  .fab-group {
+    position: fixed;
+    right: calc(20px + env(safe-area-inset-right));
+    bottom: calc(20px + env(safe-area-inset-bottom));
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    z-index: 80;
+  }
+  .fab-group.show { display: flex; }
+
+  .fab {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-size: 22px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 20px rgba(110,168,254,.4);
+    transition: transform .15s, opacity .2s;
+  }
+  .fab:active { transform: scale(.92); }
+
+  /* 上下行切换键 */
+  .line-switch {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .line-switch.show { display: flex; }
+  .line-switch button {
+    width: 56px; height: 56px;
+    border-radius: 50%;
+    background: var(--card);
+    color: var(--text);
+    border: 1px solid var(--border);
+    font-size: 22px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(0,0,0,.3);
+    transition: border-color .15s, transform .1s;
+  }
+  .line-switch button:hover { border-color: var(--accent); }
+  .line-switch button:active { transform: scale(.92); }
+
+  /* ============ 选歌面板（从右下角弹出） ============ */
+  .sheet {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 200;
+    display: none;
+    align-items: flex-end;
+    justify-content: flex-end;
+    padding: 0 calc(20px + env(safe-area-inset-right)) calc(90px + env(safe-area-inset-bottom)) 0;
+  }
+  .sheet.show { display: flex; }
+
+  .sheet-inner {
+    background: var(--card);
+    width: 360px;
+    max-width: calc(100vw - 40px);
+    max-height: 60vh;
+    border-radius: 16px;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 12px 40px rgba(0,0,0,.5);
+    animation: popIn .18s ease;
+    border: 1px solid var(--border);
+  }
+  @keyframes popIn {
+    from { transform: scale(.92) translateY(10px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+  }
+  .sheet-head {
+    padding: 14px 16px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .sheet-head h3 { font-size: 15px; }
+  .sheet-close {
+    background: none; border: none;
+    color: var(--muted); font-size: 22px;
+    cursor: pointer; line-height: 1;
+    padding: 0 4px;
+  }
+  .sheet-search {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sheet-search input {
+    width: 100%; padding: 8px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px; outline: none;
+  }
+  .sheet-search input:focus { border-color: var(--accent); }
+  .sheet-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 6px 0 12px;
+  }
+  .group-title {
+    font-size: 12px; color: var(--muted);
+    padding: 8px 16px 4px;
+  }
+  .song-option {
+    padding: 10px 16px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .song-option:hover { background: rgba(110,168,254,.1); }
+  .song-option.active {
+    color: var(--accent);
+    font-weight: 600;
+    background: rgba(110,168,254,.15);
+  }
+
+  @media (max-width: 600px) {
+    .lyrics-view .current-line { font-size: 48px; }
+    .song-name-view .name { font-size: 72px; }
+    .big-id { font-size: 60px; letter-spacing: 8px; }
+    .next-line-preview { font-size: 18px; }
+    .sheet-inner { width: calc(100vw - 40px); }
+  }
+</style>
+</head>
+<body>
+
+<!-- 连接提示框 -->
+<div class="overlay" id="overlay">
+  <h1>提词器 · 屏幕</h1>
+  <div class="big-id" id="bigId">------</div>
+  <div class="tip" id="overlayTip">
+    请在遥控器上输入这个 ID 进行连接<br>
+    两台设备需在同一 Wi-Fi 下
+  </div>
+  <button class="skip-btn" id="skipBtn">暂不连接，本机使用</button>
+</div>
+
+<!-- 主舞台 -->
+<div class="stage">
+
+  <!-- 空状态 -->
+  <div class="empty-view" id="emptyView">
+    <div class="icon">🎤</div>
+    <div class="text">点击右下角按钮选择歌曲</div>
+  </div>
+
+  <!-- 仅显示歌名 -->
+  <div class="song-name-view" id="songNameView">
+    <div class="label">即将播放</div>
+    <div class="name" id="songNameBig">—</div>
+    <div class="wait" id="waitTip">点击右下角按钮开始显示歌词</div>
+  </div>
+
+  <!-- 逐行歌词 -->
+  <div class="lyrics-view" id="lyricsView">
+    <div class="song-title-mini" id="songTitleMini"></div>
+    <div class="current-line" id="currentLine"></div>
+    <div class="next-line-preview" id="nextLinePreview"></div>
+  </div>
+</div>
+
+<!-- 右下角按钮组 -->
+<div class="fab-group show" id="fabGroup">
+  <!-- 上下行切换键 -->
+  <div class="line-switch" id="lineSwitch">
+    <button id="prevBtn" title="上一行">↑</button>
+    <button id="nextBtn" title="下一行">↓</button>
+  </div>
+  <!-- 主功能按钮 -->
+  <button class="fab" id="fabBtn" title="选择歌曲">☰</button>
+</div>
+
+<!-- 选歌面板 -->
+<div class="sheet" id="songSheet">
+  <div class="sheet-inner">
+    <div class="sheet-head">
+      <h3>选择歌曲</h3>
+      <button class="sheet-close" id="sheetClose">×</button>
+    </div>
+    <div class="sheet-search">
+      <input id="sheetSearch" placeholder="搜索歌名…" autocomplete="off">
+    </div>
+    <div class="sheet-list" id="sheetList"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   配置
+   ============================================================ */
+const WS_URL = "ws://192.168.31.6:8765";
+const ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" }
+];
+
+const songsData = [
+  { title: "2006《薛之谦》", songs: ["认真的雪","黄色枫叶","王子归来","红尘女子","爱不走","快乐帮","我的SHOW","钗头凤","MEMORIS"] },
+  { title: "2007《你过得好吗》", songs: ["苏黎世的从前","你过得好吗","爱情宣判","朋友你们还好吗","爱的期限","马戏小丑","倾城","续雪","丢手绢"] },
+  { title: "2008《深深爱过你》", songs: ["传说","深深爱过你","给我的爱人","我们的世界","星河之役","Let You Go","你过得好吗","梦开始的原点"] },
+  { title: "2009《未完成的歌》", songs: ["未完成的歌","我的雅典娜","传说","马戏小丑","你过得好吗","红尘女子","认真的雪","倾城","给我的爱人","爱的期限","我们的世界","黄色枫叶","爱我的人谢谢你","Memory"] },
+  { title: "2012《几个薛之谦》", songs: ["我知道你都知道","几个你","伏笔","为什么","我终于成了别人的女人","敷衍","我们爱过就好","楚河汉界","为了遇见你"] },
+  { title: "2013《意外》", songs: ["丑八怪","意外","你还要我怎样","其实","方圆几里","有没有","潮流季","等我回家","我想起了你"] },
+  { title: "2015《绅士》EP", songs: ["演员","绅士","下雨了"] },
+  { title: "2016《初学者》", songs: ["初学者","刚刚好","我好像在哪见过你","小孩","一半","绅士","演员","下雨了","花儿和少年","Stay Here"] },
+  { title: "2017《渡》", songs: ["动物世界","暧昧","像风一样","高尚","骆驼","别","渡","背过手","火星人来过","我害怕"] },
+  { title: "2018《怪咖》", songs: ["摩天大楼","怪咖","违背的青春","天份","肆无忌惮","醒来","哑巴","那是你离开了北京的生活","最好","狐狸"] },
+  { title: "2019《尘》", songs: ["木偶人","慢半拍","陪你去流浪","病态","尘","笑场","这么久没见","环","聊表心意","配合"] },
+  { title: "2020《天外来物》", songs: ["天外来物","迟迟","耗尽","彩券","不爱我","纸船","潘金莲","野心","把你揉碎捏成苹果","小尖尖"] },
+  { title: "2022《无数》", songs: ["变废为宝","洛城","凤毛麟角","无数","可","男二号","你不是一个人","守候","被人","关于你"] },
+  { title: "2024《守村人》", songs: ["AI","守村人","念","崇拜","情书","Nothing","银河少年","租购","解解闷","在那天回不去的路上"] },
+  { title: "近年单曲", songs: ["媚人","顽疾","湖泊","跃","金斧子银斧子","霸王别姬","天后"]}
+];
+
+/* ============================================================
+   元素
+   ============================================================ */
+const overlay = document.getElementById("overlay");
+const bigIdEl = document.getElementById("bigId");
+const overlayTip = document.getElementById("overlayTip");
+const skipBtn = document.getElementById("skipBtn");
+
+const emptyView = document.getElementById("emptyView");
+const songNameView = document.getElementById("songNameView");
+const songNameBig = document.getElementById("songNameBig");
+const waitTip = document.getElementById("waitTip");
+const lyricsView = document.getElementById("lyricsView");
+const songTitleMini = document.getElementById("songTitleMini");
+const currentLineEl = document.getElementById("currentLine");
+const nextLinePreviewEl = document.getElementById("nextLinePreview");
+
+const fabGroup = document.getElementById("fabGroup");
+const fabBtn = document.getElementById("fabBtn");
+const lineSwitch = document.getElementById("lineSwitch");
+const prevBtn = document.getElementById("prevBtn");
+const nextBtn = document.getElementById("nextBtn");
+
+const songSheet = document.getElementById("songSheet");
+const sheetClose = document.getElementById("sheetClose");
+const sheetSearch = document.getElementById("sheetSearch");
+const sheetList = document.getElementById("sheetList");
+
+/* ============================================================
+   状态
+   ============================================================ */
+let screenId = String(Math.floor(100000 + Math.random() * 900000));
+let ws = null;
+let pc = null;
+let dataChannel = null;
+let lyricsDB = {};
+
+let currentSong = "";
+let lines = [];
+let currentIndex = 0;
+let playing = false;
+let localMode = false;
+
+bigIdEl.textContent = screenId;
+
+/* ============================================================
+   加载歌词库
+   ============================================================ */
+fetch("lyrics.json")
+  .then(res => res.json())
+  .then(db => { lyricsDB = db; })
+  .catch(() => { lyricsDB = {}; });
+
+/* ============================================================
+   信令
+   ============================================================ */
+function connectSignaling() {
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    setOverlayStatus("正在注册…");
+    ws.send(JSON.stringify({ type: "register", id: screenId }));
+  };
+
+  ws.onmessage = async e => {
+    const msg = JSON.parse(e.data);
+    switch (msg.type) {
+      case "registered":
+        setOverlayStatus("等待遥控器连接…");
+        break;
+      case "remote-joined":
+        setOverlayStatus("遥控器已连接，正在建立通道…");
+        await startWebRTC();
+        break;
+      case "remote-left":
+        setOverlayStatus("遥控器已断开，等待重新连接…");
+        closeWebRTC();
+        break;
+      case "signal":
+        await handleSignal(msg.data);
+        break;
+      case "ping":
+        ws.send(JSON.stringify({ type: "pong", id: screenId }));
+        break;
+      case "error":
+        setOverlayStatus("错误：" + msg.message);
+        break;
+    }
+  };
+
+  ws.onclose = () => {
+    setOverlayStatus("与信令服务器断开，正在重连…");
+    if (!localMode) setTimeout(connectSignaling, 2000);
+  };
+}
+
+function setOverlayStatus(text) {
+  overlayTip.innerHTML = text;
+}
+
+/* ============================================================
+   暂不连接，本机使用
+   ============================================================ */
+skipBtn.addEventListener("click", () => {
+  localMode = true;
+  if (ws) { try { ws.close(); } catch (e) {} ws = null; }
+  closeWebRTC();
+
+  overlay.classList.add("hide");
+  showEmptyState();
+  fabGroup.classList.add("show");
+});
+
+function showEmptyState() {
+  emptyView.classList.add("show");
+  songNameView.classList.remove("show");
+  lyricsView.classList.remove("show");
+  lineSwitch.classList.remove("show");
+}
+
+/* ============================================================
+   WebRTC
+   ============================================================ */
+async function startWebRTC() {
+  closeWebRTC();
+  pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  dataChannel = pc.createDataChannel("control", { ordered: true });
+  bindDataChannel();
+
+  pc.onicecandidate = e => {
+    if (e.candidate) sendSignal({ type: "ice", candidate: e.candidate });
+  };
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+      setOverlayStatus("连接中断，等待重新连接…");
+    }
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  sendSignal({ type: "offer", sdp: pc.localDescription });
+}
+
+async function handleSignal(data) {
+  if (!data) return;
+  if (data.type === "answer") {
+    if (!pc) return;
+    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+  } else if (data.type === "ice") {
+    if (!pc) return;
+    try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (e) {}
+  }
+}
+
+function bindDataChannel() {
+  dataChannel.onopen = () => {
+    overlay.classList.add("hide");
+    fabGroup.classList.remove("show");   // 远程模式下隐藏本机控件
+    sendDC({ type: "ready" });
+  };
+  dataChannel.onclose = () => {
+    overlay.classList.remove("hide");
+    setOverlayStatus("遥控器已断开，等待重新连接…");
+    fabGroup.classList.remove("show");
+  };
+  dataChannel.onmessage = e => {
+    try { handleCommand(JSON.parse(e.data)); } catch (err) {}
+  };
+}
+
+function sendDC(obj) {
+  if (dataChannel && dataChannel.readyState === "open") {
+    dataChannel.send(JSON.stringify(obj));
+  }
+}
+function sendSignal(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "signal", id: screenId, data }));
+  }
+}
+function closeWebRTC() {
+  if (dataChannel) { try { dataChannel.close(); } catch (e) {} dataChannel = null; }
+  if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+  if (!localMode) overlay.classList.remove("hide");
+}
+
+/* ============================================================
+   业务指令（来自遥控器）
+   ============================================================ */
+function handleCommand(msg) {
+  switch (msg.type) {
+    case "selectSong": onSelectSong(msg.name); break;
+    case "startPlay": onStartPlay(); break;
+    case "nextLine": if (playing) nextLine(); break;
+    case "prevLine": if (playing) prevLine(); break;
+    case "firstLine": if (playing) firstLine(); break;
+    case "lastLine": if (playing) lastLine(); break;
+    case "goToLine": if (playing) goToLine(msg.index); break;
+    case "ping": sendDC({ type: "pong" }); break;
+  }
+}
+
+/* ============================================================
+   选歌面板
+   ============================================================ */
+fabBtn.addEventListener("click", () => {
+  songSheet.classList.add("show");
+  buildSheetList();
+});
+sheetClose.addEventListener("click", () => {
+  songSheet.classList.remove("show");
+});
+songSheet.addEventListener("click", e => {
+  if (e.target === songSheet) songSheet.classList.remove("show");
+});
+sheetSearch.addEventListener("input", () => {
+  buildSheetList(sheetSearch.value);
+});
+
+function buildSheetList(filter = "") {
+  sheetList.innerHTML = "";
+  const q = filter.trim().toLowerCase();
+
+  songsData.forEach(group => {
+    const matched = group.songs.filter(s => !q || s.toLowerCase().includes(q));
+    if (matched.length === 0) return;
+
+    const title = document.createElement("div");
+    title.className = "group-title";
+    title.textContent = group.title;
+    sheetList.appendChild(title);
+
+    matched.forEach(s => {
+      const div = document.createElement("div");
+      div.className = "song-option" + (s === currentSong ? " active" : "");
+      div.textContent = s;
+      div.addEventListener("click", () => {
+        if (localMode) {
+          localSelectSong(s);
+        } else {
+          sendDC({ type: "selectSong", name: s });
+        }
+        songSheet.classList.remove("show");
+      });
+      sheetList.appendChild(div);
+    });
+  });
+}
+
+/* ============================================================
+   本机模式：选歌
+   ============================================================ */
+function localSelectSong(name) {
+  currentSong = name;
+  playing = false;
+
+  const text = lyricsDB[name];
+  if (text) {
+    lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  } else {
+    lines = ["暂无《" + name + "》的歌词"];
+  }
+  currentIndex = 0;
+
+  // 显示歌名视图，不自动进入歌词
+  songNameBig.textContent = name;
+  waitTip.textContent = "点击右下角 ↑ ↓ 切换歌词";
+  emptyView.classList.remove("show");
+  songNameView.classList.add("show");
+  lyricsView.classList.remove("show");
+
+  // 显示上下行切换按钮
+  lineSwitch.classList.add("show");
+}
+
+/* ============================================================
+   遥控器模式：选歌
+   ============================================================ */
+function onSelectSong(name) {
+  currentSong = name;
+  playing = false;
+
+  const text = lyricsDB[name];
+  if (text) {
+    lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  } else {
+    lines = ["暂无《" + name + "》的歌词"];
+  }
+  currentIndex = 0;
+
+  songNameBig.textContent = name;
+  waitTip.textContent = "请在遥控器上点击「开始播放」";
+  emptyView.classList.remove("show");
+  songNameView.classList.add("show");
+  lyricsView.classList.remove("show");
+  lineSwitch.classList.remove("show");
+
+  sendDC({ type: "playState", playing: false, index: 0, total: lines.length });
+}
+
+function onStartPlay() {
+  if (!currentSong) return;
+  playing = true;
+  currentIndex = 0;
+
+  emptyView.classList.remove("show");
+  songNameView.classList.remove("show");
+  lyricsView.classList.add("show");
+  songTitleMini.textContent = currentSong;
+
+  renderLine();
+}
+
+function renderLine() {
+  if (lines.length === 0) {
+    currentLineEl.textContent = "";
+    nextLinePreviewEl.textContent = "";
+    return;
+  }
+  currentLineEl.textContent = lines[currentIndex];
+
+  if (currentIndex < lines.length - 1) {
+    nextLinePreviewEl.innerHTML =
+      '<span class="prefix">下一行</span>' + escapeHtml(lines[currentIndex + 1]);
+  } else {
+    nextLinePreviewEl.innerHTML = '<span class="prefix">已是最后一行</span>';
+  }
+
+  sendDC({
+    type: "lineIndex",
+    index: currentIndex,
+    total: lines.length,
+    playing: playing
+  });
+}
+
+function nextLine() {
+  if (currentIndex < lines.length - 1) { currentIndex++; renderLine(); }
+}
+function prevLine() {
+  if (currentIndex > 0) { currentIndex--; renderLine(); }
+}
+function firstLine() { currentIndex = 0; renderLine(); }
+function lastLine() { currentIndex = lines.length - 1; renderLine(); }
+function goToLine(i) {
+  if (i >= 0 && i < lines.length) { currentIndex = i; renderLine(); }
+}
+
+/* ============================================================
+   本机上下行按钮
+   ============================================================ */
+prevBtn.addEventListener("click", () => {
+  // 第一次点击从歌名视图进入歌词视图
+  if (!lyricsView.classList.contains("show")) {
+    if (currentSong) {
+      playing = true;
+      currentIndex = 0;
+      songNameView.classList.remove("show");
+      lyricsView.classList.add("show");
+      songTitleMini.textContent = currentSong;
+      renderLine();
+    }
+    return;
+  }
+  prevLine();
+});
+
+nextBtn.addEventListener("click", () => {
+  // 第一次点击从歌名视图进入歌词视图
+  if (!lyricsView.classList.contains("show")) {
+    if (currentSong) {
+      playing = true;
+      currentIndex = 0;
+      songNameView.classList.remove("show");
+      lyricsView.classList.add("show");
+      songTitleMini.textContent = currentSong;
+      renderLine();
+    }
+    return;
+  }
+  nextLine();
+});
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;",
+    '"': "&quot;", "'": "&#39;"
+  })[c]);
+}
+
+/* 启动 */
+connectSignaling();
+</script>
+</body>
+</html>

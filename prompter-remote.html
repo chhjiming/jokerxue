@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>提词器 · 遥控器</title>
+<style>
+  :root {
+    --bg: #0f0f12; --card: #1a1a20; --text: #e8e8ec;
+    --muted: #8a8a96; --accent: #6ea8fe; --border: #2a2a34;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* 顶部栏 */
+  .topbar {
+    flex-shrink: 0;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .back {
+    color: var(--accent); text-decoration: none;
+    font-size: 15px; padding: 4px 8px; margin-left: -8px; border-radius: 6px;
+  }
+  .topbar h1 { font-size: 17px; font-weight: 600; flex: 1; }
+  .conn-state {
+    font-size: 13px; color: var(--muted);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; }
+  .dot.ok { background: #10b981; }
+  .dot.err { background: #ef4444; }
+
+  /* 连接框 */
+  .connect-wrap {
+    flex: 1;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .connect-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px 20px;
+    text-align: center;
+    width: 100%; max-width: 360px;
+  }
+  .connect-box h2 { font-size: 16px; margin-bottom: 12px; }
+  .connect-box input {
+    font-size: 28px; padding: 12px;
+    width: 100%; text-align: center;
+    letter-spacing: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 10px; outline: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .connect-box input:focus { border-color: var(--accent); }
+  .connect-box button {
+    display: block; width: 100%;
+    margin: 14px auto 0; padding: 12px;
+    font-size: 16px; border: none;
+    background: var(--accent); color: #fff;
+    border-radius: 10px; cursor: pointer; font-family: inherit;
+  }
+  .connect-box .tip { font-size: 13px; color: var(--muted); margin-top: 12px; }
+
+  /* 主界面 */
+  .main { display: none; flex: 1; flex-direction: column; overflow: hidden; }
+  .main.show { display: flex; }
+
+  /* 歌曲信息条 */
+  .song-bar {
+    flex-shrink: 0;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px;
+  }
+  .song-bar .name {
+    font-size: 15px; font-weight: 600;
+    color: var(--accent);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .song-bar .index {
+    font-size: 13px; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
+  }
+  .song-bar .change-song {
+    flex-shrink: 0;
+    font-size: 13px;
+    color: var(--accent);
+    background: none; border: none;
+    cursor: pointer; font-family: inherit;
+    padding: 4px 8px;
+  }
+
+  /* 歌词滚动区 */
+  .lyrics-scroll {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 16px 20px 24px;
+    scroll-behavior: smooth;
+  }
+  .lyric-line {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--muted);
+    cursor: pointer;
+    transition: background .15s, color .15s;
+    margin-bottom: 2px;
+  }
+  .lyric-line:hover { background: rgba(110,168,254,.08); }
+  .lyric-line.active {
+    background: rgba(110,168,254,.22);
+    color: var(--accent);
+    font-weight: 600;
+    font-size: 17px;
+  }
+
+  /* 底部控制栏 */
+  .controls {
+    flex-shrink: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  .start-play-btn {
+    width: 100%;
+    padding: 16px;
+    font-size: 17px;
+    font-weight: 700;
+    border: none;
+    background: #10b981;
+    color: #fff;
+    border-radius: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: transform .1s;
+  }
+  .start-play-btn:active { transform: scale(.98); }
+  .start-play-btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  .line-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 8px;
+  }
+  .ctrl-btn {
+    padding: 14px 4px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color .15s, background .15s, transform .1s;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 2px;
+  }
+  .ctrl-btn .icon { font-size: 18px; }
+  .ctrl-btn:hover { border-color: var(--accent); }
+  .ctrl-btn:active { transform: scale(.95); }
+  .ctrl-btn:disabled { opacity: .3; cursor: not-allowed; }
+  .ctrl-btn.prev-next {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    font-size: 15px;
+    padding: 16px 4px;
+  }
+
+  /* 歌曲列表弹层 */
+  .song-sheet {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 200;
+    display: none;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .song-sheet.show { display: flex; }
+  .song-sheet-inner {
+    background: var(--card);
+    width: 100%; max-width: 640px;
+    max-height: 75vh;
+    border-radius: 16px 16px 0 0;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    animation: slideUp .22s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .sheet-head {
+    padding: 16px 20px 10px;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .sheet-head h3 { font-size: 16px; }
+  .sheet-close {
+    background: none; border: none;
+    color: var(--muted); font-size: 24px;
+    cursor: pointer; line-height: 1;
+    padding: 0 4px;
+  }
+  .sheet-search {
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sheet-search input {
+    width: 100%; padding: 10px 14px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 14px; outline: none;
+  }
+  .sheet-search input:focus { border-color: var(--accent); }
+  .sheet-list {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 8px 0 20px;
+  }
+  .group-title {
+    font-size: 12px; color: var(--muted);
+    padding: 10px 20px 4px;
+  }
+  .song-option {
+    padding: 12px 20px;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .song-option:hover { background: rgba(110,168,254,.1); }
+  .song-option.active {
+    color: var(--accent);
+    font-weight: 600;
+    background: rgba(110,168,254,.15);
+  }
+</style>
+</head>
+<body>
+
+<!-- 顶部栏 -->
+<div class="topbar">
+  <a class="back" href="prompter.html">← 返回</a>
+  <h1>提词器 · 遥控器</h1>
+  <span class="conn-state" id="connState">
+    <span class="dot" id="connDot"></span>
+    <span id="connText">未连接</span>
+  </span>
+</div>
+
+<!-- 连接框 -->
+<div class="connect-wrap" id="connectWrap">
+  <div class="connect-box">
+    <h2>输入屏幕 ID</h2>
+    <input id="idInput" maxlength="6" placeholder="------" inputmode="numeric">
+    <button id="connectBtn">连接</button>
+    <div class="tip">输入屏幕上显示的 6 位数字</div>
+  </div>
+</div>
+
+<!-- 主界面 -->
+<div class="main" id="main">
+
+  <!-- 歌曲信息条 -->
+  <div class="song-bar">
+    <span class="name" id="currentSongName">未选择歌曲</span>
+    <span class="index" id="lineIndex">— / —</span>
+    <button class="change-song" id="changeSongBtn">选歌</button>
+  </div>
+
+  <!-- 歌词滚动区 -->
+  <div class="lyrics-scroll" id="lyricsScroll">
+    <div style="text-align:center;color:var(--muted);padding:40px 0;font-size:14px;" id="lyricsHint">
+      请先选择歌曲
+    </div>
+  </div>
+
+  <!-- 底部控制栏 -->
+  <div class="controls">
+    <button class="start-play-btn" id="startPlayBtn" disabled>▶ 开始播放</button>
+    <div class="line-controls">
+      <button class="ctrl-btn" id="firstBtn" disabled>
+        <span class="icon">⏮</span><span>首行</span>
+      </button>
+      <button class="ctrl-btn prev-next" id="prevBtn" disabled>↑ 上一行</button>
+      <button class="ctrl-btn prev-next" id="nextBtn" disabled>↓ 下一行</button>
+      <button class="ctrl-btn" id="lastBtn" disabled>
+        <span class="icon">⏭</span><span>末行</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- 歌曲列表弹层 -->
+<div class="song-sheet" id="songSheet">
+  <div class="song-sheet-inner">
+    <div class="sheet-head">
+      <h3>选择歌曲</h3>
+      <button class="sheet-close" id="sheetClose">×</button>
+    </div>
+    <div class="sheet-search">
+      <input id="sheetSearch" placeholder="搜索歌名…" autocomplete="off">
+    </div>
+    <div class="sheet-list" id="sheetList"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   配置
+   ============================================================ */
+const WS_URL = "ws://192.168.31.6:8765";
+const ICE_SERVERS = [
+  { urls: "stun:stun.l.google.com:19302" }
+];
+
+const songsData = [
+  { title: "2006《薛之谦》", songs: ["认真的雪","黄色枫叶","王子归来","红尘女子","爱不走","快乐帮","我的SHOW","钗头凤","MEMORIS"] },
+  { title: "2007《你过得好吗》", songs: ["苏黎世的从前","你过得好吗","爱情宣判","朋友你们还好吗","爱的期限","马戏小丑","倾城","续雪","丢手绢"] },
+  { title: "2008《深深爱过你》", songs: ["传说","深深爱过你","给我的爱人","我们的世界","星河之役","Let You Go","你过得好吗","梦开始的原点"] },
+  { title: "2009《未完成的歌》", songs: ["未完成的歌","我的雅典娜","传说","马戏小丑","你过得好吗","红尘女子","认真的雪","倾城","给我的爱人","爱的期限","我们的世界","黄色枫叶","爱我的人谢谢你","Memory"] },
+  { title: "2012《几个薛之谦》", songs: ["我知道你都知道","几个你","伏笔","为什么","我终于成了别人的女人","敷衍","我们爱过就好","楚河汉界","为了遇见你"] },
+  { title: "2013《意外》", songs: ["丑八怪","意外","你还要我怎样","其实","方圆几里","有没有","潮流季","等我回家","我想起了你"] },
+  { title: "2015《绅士》EP", songs: ["演员","绅士","下雨了"] },
+  { title: "2016《初学者》", songs: ["初学者","刚刚好","我好像在哪见过你","小孩","一半","绅士","演员","下雨了","花儿和少年","Stay Here"] },
+  { title: "2017《渡》", songs: ["动物世界","暧昧","像风一样","高尚","骆驼","别","渡","背过手","火星人来过","我害怕"] },
+  { title: "2018《怪咖》", songs: ["摩天大楼","怪咖","违背的青春","天份","肆无忌惮","醒来","哑巴","那是你离开了北京的生活","最好","狐狸"] },
+  { title: "2019《尘》", songs: ["木偶人","慢半拍","陪你去流浪","病态","尘","笑场","这么久没见","环","聊表心意","配合"] },
+  { title: "2020《天外来物》", songs: ["天外来物","迟迟","耗尽","彩券","不爱我","纸船","潘金莲","野心","把你揉碎捏成苹果","小尖尖"] },
+  { title: "2022《无数》", songs: ["变废为宝","洛城","凤毛麟角","无数","可","男二号","你不是一个人","守候","被人","关于你"] },
+  { title: "2024《守村人》", songs: ["AI","守村人","念","崇拜","情书","Nothing","银河少年","租购","解解闷","在那天回不去的路上"] },
+  { title: "近年单曲", songs: ["媚人","顽疾","湖泊","跃","金斧子银斧子","霸王别姬","天后"]}
+];
+
+/* ============================================================
+   元素
+   ============================================================ */
+const connectWrap = document.getElementById("connectWrap");
+const main = document.getElementById("main");
+const idInput = document.getElementById("idInput");
+const connectBtn = document.getElementById("connectBtn");
+const connDot = document.getElementById("connDot");
+const connText = document.getElementById("connText");
+const currentSongName = document.getElementById("currentSongName");
+const lineIndexEl = document.getElementById("lineIndex");
+const changeSongBtn = document.getElementById("changeSongBtn");
+const lyricsScroll = document.getElementById("lyricsScroll");
+const lyricsHint = document.getElementById("lyricsHint");
+const startPlayBtn = document.getElementById("startPlayBtn");
+const prevBtn = document.getElementById("prevBtn");
+const nextBtn = document.getElementById("nextBtn");
+const firstBtn = document.getElementById("firstBtn");
+const lastBtn = document.getElementById("lastBtn");
+const songSheet = document.getElementById("songSheet");
+const sheetClose = document.getElementById("sheetClose");
+const sheetSearch = document.getElementById("sheetSearch");
+const sheetList = document.getElementById("sheetList");
+
+/* ============================================================
+   状态
+   ============================================================ */
+let screenId = "";
+let ws = null;
+let pc = null;
+let dataChannel = null;
+let currentSong = "";
+let lines = [];
+let currentIndex = 0;
+let playing = false;
+let lyricsDB = {};
+
+/* 预加载歌词库（遥控器也需要知道完整歌词用于显示） */
+fetch("lyrics.json")
+  .then(res => res.json())
+  .then(db => { lyricsDB = db; })
+  .catch(() => { lyricsDB = {}; });
+
+/* ============================================================
+   信令
+   ============================================================ */
+connectBtn.addEventListener("click", () => {
+  const id = idInput.value.trim();
+  if (!/^\d{6}$/.test(id)) {
+    alert("请输入 6 位数字 ID");
+    return;
+  }
+  screenId = id;
+  connectSignaling();
+});
+
+function connectSignaling() {
+  setConn("正在连接…", "wait");
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify({ type: "join", id: screenId }));
+  };
+
+  ws.onmessage = async e => {
+    const msg = JSON.parse(e.data);
+    switch (msg.type) {
+      case "joined":
+        setConn("等待 WebRTC…", "wait");
+        break;
+      case "screen-left":
+        setConn("屏幕已断开", "err");
+        closeWebRTC();
+        break;
+      case "signal":
+        await handleSignal(msg.data);
+        break;
+      case "ping":
+        ws.send(JSON.stringify({ type: "pong", id: screenId }));
+        break;
+      case "error":
+        setConn("错误：" + msg.message, "err");
+        break;
+    }
+  };
+
+  ws.onclose = () => setConn("连接已断开", "err");
+}
+
+function setConn(text, kind) {
+  connText.textContent = text;
+  connDot.className = "dot" + (kind === "ok" ? " ok" : kind === "err" ? " err" : "");
+}
+
+/* ============================================================
+   WebRTC
+   ============================================================ */
+async function handleSignal(data) {
+  if (!data) return;
+  if (data.type === "offer") {
+    closeWebRTC();
+    pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+
+    pc.onicecandidate = e => {
+      if (e.candidate) sendSignal({ type: "ice", candidate: e.candidate });
+    };
+    pc.ondatachannel = e => {
+      dataChannel = e.channel;
+      bindDataChannel();
+    };
+
+    await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    sendSignal({ type: "answer", sdp: pc.localDescription });
+  } else if (data.type === "ice") {
+    if (!pc) return;
+    try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch (e) {}
+  }
+}
+
+function bindDataChannel() {
+  dataChannel.onopen = () => {
+    setConn("已连接", "ok");
+    connectWrap.style.display = "none";
+    main.classList.add("show");
+    updateButtons();
+  };
+  dataChannel.onclose = () => {
+    setConn("通道已断开", "err");
+    main.classList.remove("show");
+    connectWrap.style.display = "flex";
+  };
+  dataChannel.onmessage = e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "lineIndex") {
+        currentIndex = msg.index;
+        lineIndexEl.textContent = (msg.index + 1) + " / " + msg.total;
+        highlightLine(msg.index);
+        if (msg.playing !== undefined) {
+          playing = msg.playing;
+          updateButtons();
+        }
+      } else if (msg.type === "playState") {
+        playing = msg.playing;
+        updateButtons();
+      }
+    } catch (err) {}
+  };
+}
+
+function sendDC(obj) {
+  if (dataChannel && dataChannel.readyState === "open") {
+    dataChannel.send(JSON.stringify(obj));
+  }
+}
+function sendSignal(data) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "signal", id: screenId, data }));
+  }
+}
+function closeWebRTC() {
+  if (dataChannel) { try { dataChannel.close(); } catch (e) {} dataChannel = null; }
+  if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+  main.classList.remove("show");
+  connectWrap.style.display = "flex";
+}
+
+/* ============================================================
+   歌曲列表弹层
+   ============================================================ */
+changeSongBtn.addEventListener("click", () => {
+  songSheet.classList.add("show");
+  buildSheetList();
+});
+sheetClose.addEventListener("click", () => {
+  songSheet.classList.remove("show");
+});
+songSheet.addEventListener("click", e => {
+  if (e.target === songSheet) songSheet.classList.remove("show");
+});
+sheetSearch.addEventListener("input", () => {
+  buildSheetList(sheetSearch.value);
+});
+
+function buildSheetList(filter = "") {
+  sheetList.innerHTML = "";
+  const q = filter.trim().toLowerCase();
+
+  songsData.forEach(group => {
+    const matched = group.songs.filter(s => !q || s.toLowerCase().includes(q));
+    if (matched.length === 0) return;
+
+    const title = document.createElement("div");
+    title.className = "group-title";
+    title.textContent = group.title;
+    sheetList.appendChild(title);
+
+    matched.forEach(s => {
+      const div = document.createElement("div");
+      div.className = "song-option" + (s === currentSong ? " active" : "");
+      div.textContent = s;
+      div.addEventListener("click", () => {
+        selectSong(s);
+        songSheet.classList.remove("show");
+      });
+      sheetList.appendChild(div);
+    });
+  });
+}
+
+/* ============================================================
+   选择歌曲
+   ============================================================ */
+function selectSong(name) {
+  currentSong = name;
+  playing = false;
+  currentSongName.textContent = name;
+  lineIndexEl.textContent = "— / —";
+
+  // 本地拆分歌词用于显示
+  const text = lyricsDB[name];
+  if (text) {
+    lines = text.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+  } else {
+    lines = ["暂无《" + name + "》的歌词"];
+  }
+  currentIndex = 0;
+
+  renderLocalLyrics();
+  sendDC({ type: "selectSong", name });
+  updateButtons();
+}
+
+/* 渲染遥控器端歌词列表 */
+function renderLocalLyrics() {
+  lyricsScroll.innerHTML = "";
+  if (lines.length === 0) {
+    lyricsScroll.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px 0;font-size:14px;">暂无歌词</div>';
+    return;
+  }
+  lines.forEach((line, i) => {
+    const div = document.createElement("div");
+    div.className = "lyric-line";
+    div.dataset.index = i;
+    div.textContent = line;
+    div.addEventListener("click", () => {
+      if (!playing) return;
+      currentIndex = i;
+      sendDC({ type: "goToLine", index: i });
+    });
+    lyricsScroll.appendChild(div);
+  });
+  highlightLine(0);
+}
+
+/* 高亮当前行并滚动到可见位置 */
+function highlightLine(index) {
+  const all = lyricsScroll.querySelectorAll(".lyric-line");
+  all.forEach(el => el.classList.remove("active"));
+  const el = lyricsScroll.querySelector('.lyric-line[data-index="' + index + '"]');
+  if (el) {
+    el.classList.add("active");
+    // 平滑滚动到中间
+    const containerRect = lyricsScroll.getBoundingClientRect();
+    const elRect = el.getBoundingClientRect();
+    const offset = elRect.top - containerRect.top - containerRect.height / 2 + elRect.height / 2;
+    lyricsScroll.scrollBy({ top: offset, behavior: "smooth" });
+  }
+}
+
+/* ============================================================
+   按钮
+   ============================================================ */
+function updateButtons() {
+  const hasSong = !!currentSong;
+  startPlayBtn.disabled = !hasSong;
+  startPlayBtn.textContent = playing ? "↻ 重新开始" : "▶ 开始播放";
+
+  const canControl = hasSong && playing;
+  prevBtn.disabled = !canControl;
+  nextBtn.disabled = !canControl;
+  firstBtn.disabled = !canControl;
+  lastBtn.disabled = !canControl;
+}
+
+startPlayBtn.addEventListener("click", () => {
+  if (!currentSong) return;
+  playing = true;
+  currentIndex = 0;
+  sendDC({ type: "startPlay" });
+  highlightLine(0);
+  updateButtons();
+});
+
+prevBtn.addEventListener("click", () => sendDC({ type: "prevLine" }));
+nextBtn.addEventListener("click", () => sendDC({ type: "nextLine" }));
+firstBtn.addEventListener("click", () => sendDC({ type: "firstLine" }));
+lastBtn.addEventListener("click", () => sendDC({ type: "lastLine" }));
+</script>
+</body>
+</html>
