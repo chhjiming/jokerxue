@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0f0f12">
+<title>歌词</title>
+<style>
+  :root {
+    --bg: #0f0f12; --text: #e8e8ec;
+    --muted: #8a8a96; --accent: #6ea8fe; --border: #2a2a34;
+  }
+  html[data-theme="light"] {
+    --bg: #f5f5f7; --text: #1a1a1f;
+    --muted: #7a7a86; --accent: #2f6fed; --border: #e2e2e8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.6;
+    display: flex; flex-direction: column;
+    -webkit-tap-highlight-color: transparent;
+    transition: background .25s, color .25s;
+  }
+  .topbar {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .back {
+    color: var(--accent); text-decoration: none;
+    font-size: 15px; white-space: nowrap; flex-shrink: 0;
+    padding: 4px 8px; margin-left: -8px; border-radius: 6px;
+  }
+  .back:active { background: rgba(110,168,254,.15); }
+  .topbar h1 {
+    font-size: 17px; font-weight: 600;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .content {
+    flex: 1; overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 28px 20px calc(80px + env(safe-area-inset-bottom));
+  }
+  .inner { max-width: 640px; margin: 0 auto; }
+  .lyrics {
+    white-space: pre-wrap;
+    font-size: 16px; line-height: 2.1;
+    color: var(--text);
+  }
+  .empty {
+    color: var(--muted); font-style: italic;
+    text-align: center; padding: 60px 20px; line-height: 1.8;
+  }
+  .skeleton {
+    height: 16px; margin-bottom: 16px; border-radius: 4px;
+    background: linear-gradient(90deg, #1e1e26 25%, #2a2a34 50%, #1e1e26 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s infinite;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <a class="back" href="javascript:history.back()">← 返回</a>
+    <h1 id="title">歌词</h1>
+  </div>
+  <div class="content">
+    <div class="inner">
+      <div id="lyrics"></div>
+    </div>
+  </div>
+
+<script>
+/* 主题初始化 */
+(function() {
+  let saved = null;
+  try { saved = localStorage.getItem("xuezhiqian-theme"); } catch (e) {}
+  if (saved) document.documentElement.setAttribute("data-theme", saved);
+  else if (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches)
+    document.documentElement.setAttribute("data-theme", "light");
+})();
+
+const params = new URLSearchParams(location.search);
+const songName = params.get("song") || "";
+
+const titleEl = document.getElementById("title");
+const lyricsEl = document.getElementById("lyrics");
+titleEl.textContent = songName || "歌词";
+document.title = songName ? songName + " - 薛之谦歌词" : "歌词";
+
+lyricsEl.innerHTML =
+  '<div class="skeleton" style="width:70%"></div>' +
+  '<div class="skeleton" style="width:90%"></div>' +
+  '<div class="skeleton" style="width:60%"></div>' +
+  '<div class="skeleton" style="width:85%"></div>' +
+  '<div class="skeleton" style="width:75%"></div>';
+
+fetch("lyrics.json")
+  .then(res => {
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return res.json();
+  })
+  .then(db => {
+    const text = db[songName];
+    if (text) {
+      lyricsEl.innerHTML = '<div class="lyrics"></div>';
+      lyricsEl.firstChild.textContent = text;
+    } else {
+      lyricsEl.innerHTML =
+        '<div class="empty">暂无《' + escapeHtml(songName) + '》的歌词<br>可在 lyrics.json 中补充</div>';
+    }
+  })
+  .catch(err => {
+    lyricsEl.innerHTML =
+      '<div class="empty">歌词加载失败：' + escapeHtml(err.message) +
+      '<br><br>请确认：<br>1. lyrics.json 与页面在同一文件夹<br>2. 通过本地服务器打开（不是直接双击）</div>';
+  });
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;",
+    '"': "&quot;", "'": "&#39;"
+  })[c]);
+}
+</script>
+</body>
+</html>
