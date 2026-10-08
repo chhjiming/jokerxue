@@ -346,7 +346,9 @@
 /* ============================================================
    配置
    ============================================================ */
-const WS_URL = "ws://192.168.31.6:8765";
+const WS_URL = (location.hostname === "localhost" || location.hostname.startsWith("192.168."))
+  ? "ws://192.168.31.6:8765"
+  : "wss://web-production-a51d8.up.railway.app";
 const ICE_SERVERS = [
   { urls: "stun:stun.l.google.com:19302" }
 ];
