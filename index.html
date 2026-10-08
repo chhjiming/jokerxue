@@ -43,7 +43,6 @@
   .theme-btn:hover { border-color: var(--accent); }
   .theme-btn:active { transform: scale(.92); }
 
-  /* 巡演入口 */
   .tour-card {
     display: flex; align-items: center; gap: 14px;
     background: linear-gradient(135deg, #6ea8fe 0%, #a86efe 100%);
@@ -95,6 +94,16 @@
   }
   .song:hover, .song:active { color: var(--accent); }
 
+  mark.hl {
+    background: rgba(110,168,254,.35);
+    color: inherit;
+    border-radius: 2px;
+    padding: 0 1px;
+  }
+  html[data-theme="light"] mark.hl {
+    background: rgba(47,111,237,.25);
+  }
+
   .hide { display: none !important; }
   .no-result {
     text-align: center; color: var(--muted);
@@ -112,7 +121,6 @@
     <button class="theme-btn" id="themeBtn" title="切换主题">🌙</button>
   </div>
 
-  <!-- 巡演入口 -->
   <a class="tour-card" href="tour.html">
     <span class="tour-icon">🎤</span>
     <span class="tour-info">
@@ -121,7 +129,7 @@
     </span>
     <span class="tour-arrow">›</span>
   </a>
-<a class="tour-card" href="tour-tianwai.html">
+  <a class="tour-card" href="tour-tianwai.html">
     <span class="tour-icon">🎤</span>
     <span class="tour-info">
       <span class="tour-title">天外来物世界巡回演唱会</span>
@@ -129,7 +137,7 @@
     </span>
     <span class="tour-arrow">›</span>
   </a>
-  
+
   <input class="search" id="search" type="search" placeholder="搜索歌名…" autocomplete="off">
   <div id="app"></div>
   <div class="no-result hide" id="noResult">没有找到匹配的歌曲</div>
@@ -200,6 +208,7 @@ data.forEach(group => {
     const a = document.createElement("a");
     a.className = "song";
     a.textContent = s;
+    a.dataset.name = s;
     a.href = "lyrics.html?song=" + encodeURIComponent(s);
     li.appendChild(a);
     ol.appendChild(li);
@@ -210,23 +219,53 @@ data.forEach(group => {
 });
 document.getElementById("count").textContent = total;
 
-/* 搜索过滤 */
+/* 搜索过滤 + 高亮 */
 const search = document.getElementById("search");
 search.addEventListener("input", () => {
   const q = search.value.trim().toLowerCase();
   let visible = 0;
+
   document.querySelectorAll(".group").forEach(group => {
     let groupVisible = 0;
     group.querySelectorAll("li").forEach(li => {
-      const match = !q || li.dataset.song.includes(q);
-      li.classList.toggle("hide", !match);
-      if (match) groupVisible++;
+      const songEl = li.querySelector(".song");
+      const fullName = songEl.dataset.name || songEl.textContent;
+      const match = !q || fullName.toLowerCase().includes(q);
+
+      if (match) {
+        if (q) {
+          const lower = fullName.toLowerCase();
+          const idx = lower.indexOf(q);
+          if (idx >= 0) {
+            const before = escapeHtml(fullName.slice(0, idx));
+            const hit = escapeHtml(fullName.slice(idx, idx + q.length));
+            const after = escapeHtml(fullName.slice(idx + q.length));
+            songEl.innerHTML = before + '<mark class="hl">' + hit + '</mark>' + after;
+          } else {
+            songEl.textContent = fullName;
+          }
+        } else {
+          songEl.textContent = fullName;
+        }
+        li.classList.remove("hide");
+        groupVisible++;
+      } else {
+        li.classList.add("hide");
+      }
     });
     group.classList.toggle("hide", groupVisible === 0);
     visible += groupVisible;
   });
+
   noResult.classList.toggle("hide", visible > 0);
 });
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;",
+    '"': "&quot;", "'": "&#39;"
+  })[c]);
+}
 </script>
 </body>
 </html>

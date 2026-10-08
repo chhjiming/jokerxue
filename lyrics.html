@@ -9,10 +9,12 @@
   :root {
     --bg: #0f0f12; --text: #e8e8ec;
     --muted: #8a8a96; --accent: #6ea8fe; --border: #2a2a34;
+    --card: #1a1a20;
   }
   html[data-theme="light"] {
     --bg: #f5f5f7; --text: #1a1a1f;
     --muted: #7a7a86; --accent: #2f6fed; --border: #e2e2e8;
+    --card: #ffffff;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
@@ -29,7 +31,7 @@
     background: var(--bg);
     border-bottom: 1px solid var(--border);
     padding: calc(12px + env(safe-area-inset-top)) 16px 12px;
-    display: flex; align-items: center; gap: 12px;
+    display: flex; align-items: center; gap: 10px;
   }
   .back {
     color: var(--accent); text-decoration: none;
@@ -38,9 +40,28 @@
   }
   .back:active { background: rgba(110,168,254,.15); }
   .topbar h1 {
+    flex: 1; min-width: 0;
     font-size: 17px; font-weight: 600;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  .tools {
+    display: flex; gap: 6px; flex-shrink: 0;
+  }
+  .tool-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color .15s, background .15s;
+    white-space: nowrap;
+  }
+  .tool-btn:hover { border-color: var(--accent); }
+  .tool-btn:active { transform: scale(.95); }
+
   .content {
     flex: 1; overflow-y: auto;
     -webkit-overflow-scrolling: touch;
@@ -62,9 +83,36 @@
     background-size: 200% 100%;
     animation: shimmer 1.4s infinite;
   }
+  html[data-theme="light"] .skeleton {
+    background: linear-gradient(90deg, #e8e8ec 25%, #f0f0f4 50%, #e8e8ec 75%);
+    background-size: 200% 100%;
+  }
   @keyframes shimmer {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
+  }
+
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(40px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(0,0,0,.85);
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 14px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s, transform .25s;
+    z-index: 999;
+  }
+  html[data-theme="light"] .toast {
+    background: rgba(30,30,40,.9);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
   }
 </style>
 </head>
@@ -72,6 +120,11 @@
   <div class="topbar">
     <a class="back" href="javascript:history.back()">← 返回</a>
     <h1 id="title">歌词</h1>
+    <div class="tools">
+      <button class="tool-btn" id="fontDown" title="缩小字号">A-</button>
+      <button class="tool-btn" id="fontUp" title="放大字号">A+</button>
+      <button class="tool-btn" id="copyBtn" title="复制歌词">复制</button>
+    </div>
   </div>
   <div class="content">
     <div class="inner">
@@ -97,6 +150,7 @@ const lyricsEl = document.getElementById("lyrics");
 titleEl.textContent = songName || "歌词";
 document.title = songName ? songName + " - 薛之谦歌词" : "歌词";
 
+/* 骨架屏 */
 lyricsEl.innerHTML =
   '<div class="skeleton" style="width:70%"></div>' +
   '<div class="skeleton" style="width:90%"></div>' +
@@ -104,6 +158,71 @@ lyricsEl.innerHTML =
   '<div class="skeleton" style="width:85%"></div>' +
   '<div class="skeleton" style="width:75%"></div>';
 
+/* 字号设置 */
+let fontSize = 16;
+try {
+  const saved = localStorage.getItem("xuezhiqian-fontsize");
+  if (saved) fontSize = parseInt(saved, 10) || 16;
+} catch (e) {}
+
+function applyFontSize() {
+  fontSize = Math.max(12, Math.min(28, fontSize));
+  const el = lyricsEl.querySelector(".lyrics");
+  if (el) el.style.fontSize = fontSize + "px";
+  try { localStorage.setItem("xuezhiqian-fontsize", fontSize); } catch (e) {}
+}
+
+document.getElementById("fontDown").addEventListener("click", () => {
+  fontSize -= 1;
+  applyFontSize();
+});
+document.getElementById("fontUp").addEventListener("click", () => {
+  fontSize += 1;
+  applyFontSize();
+});
+
+/* Toast */
+function showToast(msg) {
+  let t = document.querySelector(".toast");
+  if (!t) {
+    t = document.createElement("div");
+    t.className = "toast";
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+
+/* 复制歌词 */
+document.getElementById("copyBtn").addEventListener("click", async () => {
+  const text = lyricsEl.innerText.trim();
+  if (!text || text.includes("暂无") || text.includes("加载失败")) {
+    showToast("没有可复制的歌词");
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast("已复制歌词");
+  } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand("copy");
+      showToast("已复制歌词");
+    } catch (err) {
+      showToast("复制失败，请手动选择");
+    }
+    document.body.removeChild(ta);
+  }
+});
+
+/* 加载歌词 */
 fetch("lyrics.json")
   .then(res => {
     if (!res.ok) throw new Error("HTTP " + res.status);
@@ -114,6 +233,7 @@ fetch("lyrics.json")
     if (text) {
       lyricsEl.innerHTML = '<div class="lyrics"></div>';
       lyricsEl.firstChild.textContent = text;
+      applyFontSize();
     } else {
       lyricsEl.innerHTML =
         '<div class="empty">暂无《' + escapeHtml(songName) + '》的歌词<br>可在 lyrics.json 中补充</div>';
